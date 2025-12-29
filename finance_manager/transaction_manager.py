@@ -70,7 +70,7 @@ class TransactionManager:
             params.append(date)
         
         if tags is not None:
-            tags_json = f'[{','.join(map(str, tags))}]'
+            tags_json = f'[{",".join(map(str, tags))}]'
             update_fields.append("tags = ?")
             params.append(tags_json)
         

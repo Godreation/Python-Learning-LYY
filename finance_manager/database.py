@@ -149,7 +149,7 @@ class DatabaseManager:
                        category_id: int, description: str, date: str, 
                        tags: List[int] = None) -> int:
         """Add a new transaction"""
-        tags_json = '[]' if not tags else f'[{','.join(map(str, tags))}]'
+        tags_json = '[]' if not tags else f'[{",".join(map(str, tags))}]'
         
         query = """
             INSERT INTO transactions (amount, type, category_id, description, date, tags)

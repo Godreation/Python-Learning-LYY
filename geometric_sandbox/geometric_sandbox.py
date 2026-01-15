@@ -1,11 +1,11 @@
 import math
 import random
 import time
-import os
+import pygame
 import sys
 
 class GeometricSandbox:
-    def __init__(self, width=80, height=40, num_particles=100):
+    def __init__(self, width=800, height=600, num_particles=100):
         self.width = width
         self.height = height
         self.num_particles = num_particles
@@ -26,18 +26,29 @@ class GeometricSandbox:
         self.frame_count = 0
         self.start_time = time.perf_counter()
         
+        # 初始化Pygame
+        pygame.init()
+        self.screen = pygame.display.set_mode((width, height))
+        pygame.display.set_caption("几何物理沙盒模拟器")
+        self.clock = pygame.time.Clock()
+        
+        # 颜色定义
+        self.BLACK = (0, 0, 0)
+        self.WHITE = (255, 255, 255)
+        self.RED = (255, 0, 0)
+        self.BLUE = (0, 0, 255)
+        self.GREEN = (0, 255, 0)
+        self.YELLOW = (255, 255, 0)
+        
         # 初始化粒子
         self._init_particles()
-        
-        # 设置终端
-        self._setup_terminal()
     
     def _init_particles(self):
         """初始化粒子系统"""
         self.particles = []
         for _ in range(self.num_particles):
-            x = random.uniform(5, self.width - 5)
-            y = random.uniform(5, self.height - 5)
+            x = random.uniform(50, self.width - 50)
+            y = random.uniform(50, self.height - 50)
             vx = random.uniform(-1, 1)
             vy = random.uniform(-1, 1)
             
@@ -45,17 +56,6 @@ class GeometricSandbox:
                 'x': x, 'y': y,
                 'vx': vx, 'vy': vy
             })
-    
-    def _setup_terminal(self):
-        """设置终端显示参数"""
-        os.system('cls' if os.name == 'nt' else 'clear')
-        sys.stdout.write('\033[?25l')  # 隐藏光标
-        sys.stdout.flush()
-    
-    def _cleanup_terminal(self):
-        """恢复终端设置"""
-        sys.stdout.write('\033[?25h')  # 显示光标
-        sys.stdout.flush()
     
     def _calculate_distance(self, x1, y1, x2, y2):
         """计算两点间距离"""
@@ -68,8 +68,7 @@ class GeometricSandbox:
         dy = center_y - particle['y']
         distance = self._calculate_distance(particle['x'], particle['y'], center_x, center_y)
         
-        if distance > 0.1:  # 避免除以零
-            # 三维空间衰减：F = G * (中心 - 粒子位置) / r³
+        if distance > 0.1:
             force_factor = self.gravity_strength / (distance ** 3 + 0.1)
             particle['vx'] += dx * force_factor
             particle['vy'] += dy * force_factor
@@ -81,36 +80,38 @@ class GeometricSandbox:
         distance = self._calculate_distance(particle['x'], particle['y'], 
                                            self.mouse_pos[0], self.mouse_pos[1])
         
-        if distance < 15 and distance > 0.1:
-            # F = 斥力强度 * (粒子 - 鼠标) / r²
+        if distance < 50 and distance > 0.1:
             force_factor = self.mouse_repel_strength / (distance ** 2 + 0.1)
             particle['vx'] += dx * force_factor
             particle['vy'] += dy * force_factor
     
     def _apply_boundary_forces(self, particle):
         """应用边界斥力"""
+        boundary = 50
+        
         # 左边界
-        if particle['x'] < 5:
-            force = self.boundary_stiffness / ((particle['x'] + 0.1) ** 2)
+        if particle['x'] < boundary:
+            force = self.boundary_stiffness / ((particle['x'] - boundary + 10.1) ** 2)
             particle['vx'] += force
         
         # 右边界
-        if particle['x'] > self.width - 5:
-            force = self.boundary_stiffness / ((self.width - particle['x'] + 0.1) ** 2)
+        if particle['x'] > self.width - boundary:
+            force = self.boundary_stiffness / ((self.width - boundary - particle['x'] + 10.1) ** 2)
             particle['vx'] -= force
         
         # 上边界
-        if particle['y'] < 5:
-            force = self.boundary_stiffness / ((particle['y'] + 0.1) ** 2)
+        if particle['y'] < boundary:
+            force = self.boundary_stiffness / ((particle['y'] - boundary + 10.1) ** 2)
             particle['vy'] += force
         
         # 下边界
-        if particle['y'] > self.height - 5:
-            force = self.boundary_stiffness / ((self.height - particle['y'] + 0.1) ** 2)
+        if particle['y'] > self.height - boundary:
+            force = self.boundary_stiffness / ((self.height - boundary - particle['y'] + 10.1) ** 2)
             particle['vy'] -= force
     
     def _handle_particle_collisions(self):
         """处理粒子间碰撞"""
+        # 简化碰撞检测，减少计算量
         for i in range(len(self.particles)):
             for j in range(i + 1, len(self.particles)):
                 p1 = self.particles[i]
@@ -118,14 +119,14 @@ class GeometricSandbox:
                 
                 distance = self._calculate_distance(p1['x'], p1['y'], p2['x'], p2['y'])
                 
-                if distance < 2:  # 碰撞距离阈值
-                    # 一维弹性碰撞简化版：交换速度分量
+                if distance < 10:
+                    # 一维弹性碰撞简化版
                     p1['vx'], p2['vx'] = p2['vx'], p1['vx']
                     p1['vy'], p2['vy'] = p2['vy'], p1['vy']
                     
                     # 轻微弹开
                     if distance > 0:
-                        push_factor = (2 - distance) * 0.1
+                        push_factor = (10 - distance) * 0.01
                         dx = p2['x'] - p1['x']
                         dy = p2['y'] - p1['y']
                         p1['vx'] -= dx * push_factor
@@ -141,7 +142,7 @@ class GeometricSandbox:
             self._apply_mouse_force(particle)
             self._apply_boundary_forces(particle)
             
-            # 欧拉积分：pos += velocity * dt
+            # 欧拉积分
             particle['x'] += particle['vx'] * dt
             particle['y'] += particle['vy'] * dt
             
@@ -153,27 +154,25 @@ class GeometricSandbox:
         self._handle_particle_collisions()
     
     def _render_frame(self):
-        """渲染一帧到终端"""
-        # 创建双缓冲字符数组
-        buffer = [[' ' for _ in range(self.width)] for _ in range(self.height)]
+        """渲染一帧"""
+        # 填充背景
+        self.screen.fill(self.BLACK)
+        
+        # 绘制边界
+        pygame.draw.rect(self.screen, (30, 30, 30), (50, 50, self.width - 100, self.height - 100), 1)
         
         # 绘制粒子
         for particle in self.particles:
-            x = int(particle['x'])
-            y = int(particle['y'])
-            
-            if 0 <= x < self.width and 0 <= y < self.height:
-                buffer[y][x] = '·'
+            x, y = int(particle['x']), int(particle['y'])
+            pygame.draw.circle(self.screen, self.WHITE, (x, y), 3)
         
         # 绘制中心吸引子
         center_x, center_y = self.width // 2, self.height // 2
-        if 0 <= center_x < self.width and 0 <= center_y < self.height:
-            buffer[center_y][center_x] = '◉'
+        pygame.draw.circle(self.screen, self.YELLOW, (center_x, center_y), 8)
         
         # 绘制鼠标力源
         mouse_x, mouse_y = int(self.mouse_pos[0]), int(self.mouse_pos[1])
-        if 0 <= mouse_x < self.width and 0 <= mouse_y < self.height:
-            buffer[mouse_y][mouse_x] = '+'
+        pygame.draw.circle(self.screen, self.RED, (mouse_x, mouse_y), 10, 1)
         
         # 计算系统能量（动能）
         total_energy = sum(p['vx']**2 + p['vy']**2 for p in self.particles)
@@ -183,97 +182,74 @@ class GeometricSandbox:
         elapsed_time = current_time - self.start_time
         fps = self.frame_count / elapsed_time if elapsed_time > 0 else 0
         
-        # 构建显示字符串
-        output_lines = []
+        # 绘制状态信息
+        try:
+            # 尝试使用系统字体（支持中文）
+            font = pygame.font.SysFont("SimHei", 36)
+        except:
+            # 如果系统字体不可用，使用默认字体
+            font = pygame.font.Font(None, 36)
+        status_text = font.render(f"帧率: {fps:.1f} | 粒子数: {len(self.particles)} | 能量: {total_energy:.0f}", True, self.WHITE)
+        self.screen.blit(status_text, (10, 10))
         
-        # 添加状态信息
-        status_line = f"帧率: {fps:.1f} | 粒子数: {len(self.particles)} | 能量: {total_energy:.0f}"
-        output_lines.append(status_line)
+        # 绘制控制说明
+        try:
+            # 尝试使用系统字体（支持中文）
+            control_font = pygame.font.SysFont("SimHei", 24)
+        except:
+            # 如果系统字体不可用，使用默认字体
+            control_font = pygame.font.Font(None, 24)
+        control_text = control_font.render("空格:暂停/继续 | R:重置 | A/Z:引力 | Q:退出", True, self.WHITE)
+        self.screen.blit(control_text, (10, self.height - 30))
         
-        # 添加模拟区域
-        for row in buffer:
-            output_lines.append(''.join(row))
-        
-        # 添加控制说明
-        controls_line = "空格:暂停/继续 | R:重置 | A/Z:引力 | Q:退出"
-        output_lines.append(controls_line)
-        
-        # 一次性输出（双缓冲）
-        sys.stdout.write('\033[H')  # 光标回到左上角
-        sys.stdout.write('\n'.join(output_lines))
-        sys.stdout.flush()
+        # 更新显示
+        pygame.display.flip()
         
         self.frame_count += 1
     
     def _handle_input(self):
-        """处理键盘输入"""
-        try:
-            import msvcrt
-            if msvcrt.kbhit():
-                key = msvcrt.getch().decode('utf-8')
-                
-                if key == ' ':
+        """处理输入"""
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                self.running = False
+            elif event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_SPACE:
                     self.paused = not self.paused
-                elif key == 'r' or key == 'R':
+                elif event.key == pygame.K_r:
                     self._init_particles()
-                elif key == 'a' or key == 'A':
+                elif event.key == pygame.K_a:
                     self.gravity_strength = min(2.0, self.gravity_strength + 0.1)
-                elif key == 'z' or key == 'Z':
+                elif event.key == pygame.K_z:
                     self.gravity_strength = max(0.1, self.gravity_strength - 0.1)
-                elif key == 'q' or key == 'Q':
+                elif event.key == pygame.K_q:
                     self.running = False
-                
-                # 方向键控制鼠标位置
-                elif key == '\xe0':  # 方向键前缀
-                    arrow_key = msvcrt.getch().decode('utf-8')
-                    if arrow_key == 'H':  # 上
-                        self.mouse_pos[1] = max(0, self.mouse_pos[1] - 1)
-                    elif arrow_key == 'P':  # 下
-                        self.mouse_pos[1] = min(self.height - 1, self.mouse_pos[1] + 1)
-                    elif arrow_key == 'K':  # 左
-                        self.mouse_pos[0] = max(0, self.mouse_pos[0] - 1)
-                    elif arrow_key == 'M':  # 右
-                        self.mouse_pos[0] = min(self.width - 1, self.mouse_pos[0] + 1)
-        except:
-            pass  # 非Windows系统或输入不可用
+            elif event.type == pygame.MOUSEMOTION:
+                self.mouse_pos = list(event.pos)
     
     def run(self):
         """主运行循环"""
-        target_fps = 30
-        frame_time = 1.0 / target_fps
+        while self.running:
+            # 处理输入
+            self._handle_input()
+            
+            # 更新物理
+            if not self.paused:
+                dt = 1.0 / 60.0  # 固定时间步长
+                self._update_particles(dt)
+            
+            # 渲染
+            self._render_frame()
+            
+            # 控制帧率
+            self.clock.tick(60)
         
-        last_time = time.perf_counter()
-        
-        try:
-            while self.running:
-                current_time = time.perf_counter()
-                dt = current_time - last_time
-                
-                if dt >= frame_time:
-                    self._handle_input()
-                    
-                    if not self.paused:
-                        self._update_particles(dt)
-                    
-                    self._render_frame()
-                    last_time = current_time
-                
-                # 避免过度占用CPU
-                time.sleep(0.001)
-        
-        except KeyboardInterrupt:
-            pass
-        finally:
-            self._cleanup_terminal()
+        # 退出Pygame
+        pygame.quit()
 
 def main():
     """主函数"""
     try:
-        # 获取终端尺寸
-        columns, rows = os.get_terminal_size()
-        width = min(80, columns - 1)
-        height = min(40, rows - 3)  # 留出行显示状态信息
-        
+        width, height = 800, 600
         num_particles = random.randint(50, 200)
         
         sandbox = GeometricSandbox(width, height, num_particles)
@@ -281,7 +257,8 @@ def main():
         
     except Exception as e:
         print(f"错误: {e}")
-        print("请确保终端尺寸足够大（至少80x40）")
+        import traceback
+        traceback.print_exc()
 
 if __name__ == "__main__":
     main()
